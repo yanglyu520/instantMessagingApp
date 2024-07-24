@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"sync"
 )
@@ -74,7 +73,6 @@ func (this *Server) Start() {
 
 }
 
-// Handler Reads and Writes to the connection
 func (this *Server) Handler(conn net.Conn) {
 	// print to stdout
 	fmt.Println("connection is established...", conn.RemoteAddr().String())
@@ -82,7 +80,6 @@ func (this *Server) Handler(conn net.Conn) {
 	// 1. the user is online put the user into the online map
 	// create the new user
 	// the NewUser method creates a goroutine that listens to any data written to the stream
-	// and the user goroutine will write to connection
 	user := NewUsr(conn)
 
 	// 2. add the user to the map
@@ -92,32 +89,10 @@ func (this *Server) Handler(conn net.Conn) {
 
 	// save the broadcast message "xxx comes online" to the this.Message Channel
 	// this function will start the chain effect on the user' listenAndSendToConn goroutine
-	this.InitiateBroadcastingWithMsg(user, "just comes online")
-
-	// step3: Reads from any message the client send
-	go func() {
-		buf := make([]byte, 1024)
-		for {
-			n, err := conn.Read(buf)
-			if err != nil && err != io.EOF {
-				fmt.Println("conn.Read err: ", err)
-				return
-			}
-			if n == 0 {
-				this.InitiateBroadcastingWithMsg(user, "just comes offline")
-				return
-			}
-
-			userMsg := string(buf[:n-1])
-			this.InitiateBroadcastingWithMsg(user, userMsg)
-		}
-	}()
-
-	// block the
-	select {}
+	this.InitiateBroadcasting(user, "just comes online")
 }
 
-func (this *Server) InitiateBroadcastingWithMsg(user *Usr, msg string) {
+func (this *Server) InitiateBroadcasting(user *Usr, msg string) {
 	sendMsg := fmt.Sprintf("user of name %s %s", user.Name, msg)
 	this.Message <- sendMsg
 }
