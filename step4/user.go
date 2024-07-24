@@ -4,21 +4,26 @@ import (
 	"net"
 )
 
+// step4: add server struct to server
 type Usr struct {
 	Name string // user name
 	Addr string // user remote ip address
 	C    chan string
 	conn net.Conn
+
+	server *Server // connect user to server
 }
 
 // initiate a new user
-func NewUsr(conn net.Conn) *Usr {
+func NewUsr(conn net.Conn, srv *Server) *Usr {
 	userAddr := conn.RemoteAddr().String()
 	usr := &Usr{
 		Name: userAddr,
 		Addr: userAddr,
 		C:    make(chan string),
 		conn: conn,
+		// step 4: connect user to server
+		server: srv,
 	}
 
 	//  start listening to any data sent to the user's C data string stream
@@ -38,4 +43,27 @@ func (this *Usr) ListenAndWriteToConn() {
 			return
 		}
 	}
+}
+
+// deal with user coming online
+func (this *Usr) Online() {
+	this.server.mapLock.Lock()
+	this.server.OnlineMap[this.Name] = this
+	this.server.mapLock.Unlock()
+
+	this.server.InitiateBroadcastWithMsg(this, "comes online")
+}
+
+// deal with user coming offline
+func (this *Usr) Offline() {
+	this.server.mapLock.Lock()
+	delete(this.server.OnlineMap, this.Name)
+	this.server.mapLock.Unlock()
+
+	this.server.InitiateBroadcastWithMsg(this, "comes offline")
+}
+
+// deal with user type in messages to be broadcast to the group
+func (this *Usr) GroupMessage(msg string) {
+	this.server.InitiateBroadcastWithMsg(this, msg)
 }

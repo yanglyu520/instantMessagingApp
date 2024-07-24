@@ -81,20 +81,9 @@ func (this *Server) Handler(conn net.Conn) {
 	// 1. the user is online put the user into the online map
 	// create the new user
 	// the NewUser method creates a goroutine that listens to any data written to the stream
-	user := NewUsr(conn)
+	user := NewUsr(conn, this)
 
-	// 2. add the user to the map
-	this.mapLock.Lock()
-	this.OnlineMap[user.Name] = user
-	this.mapLock.Unlock()
-
-	// save the broadcast message "xxx comes online" to the this.Message Channel
-	// this function will start the chain effect on the user' listenAndSendToConn goroutine
-	this.InitiateBroadcastWithMsg(user, "just comes online")
-
-	// save the broadcast message "xxx comes online" to the this.Message Channel
-	// this function will start the chain effect on the user' listenAndSendToConn goroutine
-	this.InitiateBroadcastWithMsg(user, "just comes online")
+	user.Online()
 
 	// step3: Reads from any message the client send
 	go func() {
@@ -106,12 +95,12 @@ func (this *Server) Handler(conn net.Conn) {
 				return
 			}
 			if n == 0 {
-				this.InitiateBroadcastWithMsg(user, "just comes offline")
+				user.Offline()
 				return
 			}
 
 			userMsg := string(buf[:n-1])
-			this.InitiateBroadcastWithMsg(user, userMsg)
+			user.GroupMessage(userMsg)
 		}
 	}()
 
