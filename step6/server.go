@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"sync"
 )
@@ -48,7 +49,6 @@ func (this *Server) Start() {
 	}
 	defer listener.Close()
 
-	//
 	go this.SendMessageToUserChannel()
 
 	// accept, blocking function
@@ -68,33 +68,48 @@ func (this *Server) Start() {
 		// we can now handler the http connection in a goroutine
 		// step2: the handler connection will create a user upon the connection established
 		// the newuser will open another goroutine that listens for any data send to the new user channel
+		// step3: read any message from the message channel and start broadcast
 		go this.Handler(conn)
 	}
 
 }
 
-// Handler Reads and Writes to the connection
 func (this *Server) Handler(conn net.Conn) {
 	// print to stdout
-	fmt.Println("connection is established...", conn.RemoteAddr().String())
+	fmt.Println("connection is established with user: ", conn.RemoteAddr().String())
 
 	// 1. the user is online put the user into the online map
 	// create the new user
 	// the NewUser method creates a goroutine that listens to any data written to the stream
-	// and the user goroutine will write to connection
-	user := NewUsr(conn)
+	user := NewUsr(conn, this)
 
-	// 2. add the user to the map
-	this.mapLock.Lock()
-	this.OnlineMap[user.Name] = user
-	this.mapLock.Unlock()
+	user.Online()
 
-	// block indefinitely without costing resources because the kernel thread will unbind with a blocking goroutine
+	// step3: Reads from any message the client send
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			n, err := conn.Read(buf)
+			if err != nil && err != io.EOF {
+				fmt.Println("conn.Read err: ", err)
+				return
+			}
+			if n == 0 {
+				user.Offline()
+				return
+			}
+
+			userMsg := string(buf[:n-1])
+			user.GroupMessage(userMsg)
+		}
+	}()
+
+	// block indefinitely
 	select {}
 }
 
 func (this *Server) InitiateBroadcastWithMsg(user *Usr, msg string) {
-	sendMsg := fmt.Sprintf("%s", msg)
+	sendMsg := fmt.Sprintf("%s: %s", user.Name, msg)
 	this.Message <- sendMsg
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"net"
+	"strings"
 )
 
 // step4: add server struct to server
@@ -68,7 +69,21 @@ func (this *Usr) GroupMessage(msg string) {
 	if msg == "who" {
 		this.server.mapLock.Lock()
 		for _, u := range this.server.OnlineMap {
-			this.conn.Write([]byte(u.Name + " " + u.Addr + "is online\n"))
+			this.conn.Write([]byte(u.Name + " " + u.Addr + " is online\n"))
+		}
+		this.server.mapLock.Unlock()
+	} else if len(msg) > 7 && msg[:7] == "rename|" {
+		newName := strings.Split(msg, "|")[1]
+
+		this.server.mapLock.Lock()
+		_, ok := this.server.OnlineMap[newName]
+		if !ok {
+			delete(this.server.OnlineMap, this.Name)
+			this.server.OnlineMap[newName] = this
+			this.Name = newName
+			this.conn.Write([]byte("name changed\n"))
+		} else {
+			this.conn.Write([]byte("the name already exists\n"))
 		}
 		this.server.mapLock.Unlock()
 	}
